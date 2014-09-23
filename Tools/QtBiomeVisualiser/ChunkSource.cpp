@@ -1,10 +1,10 @@
 #include "Globals.h"
 #include "ChunkSource.h"
 #include <QThread>
-#include "Generating/BioGen.h"
+#include "src/Generating/BioGen.h"
 #include "inifile/iniFile.h"
-#include "StringCompression.h"
-#include "WorldStorage/FastNBT.h"
+#include "src/StringCompression.h"
+#include "src/WorldStorage/FastNBT.h"
 
 
 
@@ -142,8 +142,8 @@ static void biomesToImage(cChunkDef::BiomeMap & a_Biomes, Chunk::Image & a_Image
 ////////////////////////////////////////////////////////////////////////////////
 // BioGenSource:
 
-BioGenSource::BioGenSource(QString a_WorldIniPath) :
-	m_WorldIniPath(a_WorldIniPath),
+BioGenSource::BioGenSource(cIniFilePtr a_IniFile) :
+	m_IniFile(a_IniFile),
 	m_Mtx(QMutex::Recursive)
 {
 	reload();
@@ -171,14 +171,10 @@ void BioGenSource::getChunkBiomes(int a_ChunkX, int a_ChunkZ, ChunkPtr a_DestChu
 
 void BioGenSource::reload()
 {
-	cIniFile ini;
-	ini.ReadFile(m_WorldIniPath.toStdString());
-	int seed = ini.GetValueSetI("Seed", "Seed", 0);
+	int seed = m_IniFile->GetValueSetI("Generator", "Seed", 0);
 	bool unused = false;
 	QMutexLocker lock(&m_Mtx);
-	m_BiomeGen.reset(cBiomeGen::CreateBiomeGen(ini, seed, unused));
-	lock.unlock();
-	ini.WriteFile(m_WorldIniPath.toStdString());
+	m_BiomeGen.reset(cBiomeGen::CreateBiomeGen(*m_IniFile, seed, unused));
 }
 
 

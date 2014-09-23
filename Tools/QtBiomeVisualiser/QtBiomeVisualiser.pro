@@ -47,7 +47,7 @@ SOURCES += main.cpp\
     ../../lib/zlib/trees.c \
     ../../lib/zlib/uncompr.c \
     ../../lib/zlib/zutil.c \
-    GeneratorSetupDlg.cpp
+    GeneratorSetup.cpp
 
 HEADERS  += MainWindow.h \
 		Globals.h \
@@ -80,17 +80,15 @@ HEADERS  += MainWindow.h \
     ../../lib/zlib/zconf.h \
     ../../lib/zlib/zlib.h \
     ../../lib/zlib/zutil.h \
-    GeneratorSetupDlg.h
+    GeneratorSetup.h
 
 INCLUDEPATH += $$_PRO_FILE_PWD_ \
-	$$_PRO_FILE_PWD_/../../src \
-	$$_PRO_FILE_PWD_/../../lib
+	$$_PRO_FILE_PWD_/../../lib \
+	$$_PRO_FILE_PWD_/../../
 
 
 CONFIG += C++11
 
-OTHER_FILES += \
-    ../../lib/zlib/example.c.txt \
-    ../../lib/zlib/minigzip.c.txt
+OTHER_FILES +=
 
 
