@@ -5,7 +5,7 @@ script: cmake . -DBUILD_TOOLS=1 -DSELF_TEST=1 && make -j 2 && cd MCServer/ && (e
   stop | $MCSERVER_PATH)
 env:
   global: 
-  - secure: "WeZyJ8eRWCPTOPxBftJph72ONcgrapSa0B8othImpKuAUdXFUUEVplYTiiLZBxryJQNOHPMXtugH/p3tGQL6YGsKsj93seKC9L2boMjcVtCApN4YJEW21JFc2lzknAQjMxAYO6vURAIi1pLb1Cx4NL+nOUo7UTzi8baBsYj0W/4="
+  - secure: "MHpTRJiQzsQnPHKiaRhWmP2HSco9KpWkkzUB7qsAmyeY8J2Yr63PT5tbYmKi5nahyDOqkQoYojEz0LYurzW4Bfl2USZrLNSSYBEOgfqEQc80WzjBXFIKWDpCUmPOMhqoHWZOIvMoaEsSzgm7XYbyN0xV9Ev718MOn4mCjMrKDtY="
   matrix:
   - TRAVIS_MCSERVER_BUILD_TYPE=RELEASE MCSERVER_PATH=./MCServer
 notifications:
@@ -21,5 +21,3 @@ addons:
     build_command_prepend: cmake . -DBUILD_TOOLS=1 -DSELF_TEST=1
     build_command: make
     branch_pattern: coverity_scan
-TOKEN=sTZ9hRSi6B7Vbw37jLyrpw:
-  secure: FjrHWey4nyAKudZ5Z8Ul0G7++GQcmIl6R592qjP+8i8Zvw/vKGFpNTr2c+kaL8wm9aJ7ZEClyFxOJ62y8whrsrzoTGe/Eei44WXajZSJ3XlDlxHmyTdYkpgxY4JTPd0sj5hsK0EPmZ3+cSTkKv27VqmwTUSVSSZ3lWTUIfRUMgk=
