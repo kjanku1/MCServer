@@ -497,12 +497,15 @@ bool cByteBuffer::ReadPosition(int & a_BlockX, int & a_BlockY, int & a_BlockZ)
 		return false;
 	}
 
-	UInt32 BlockXRaw = (Value >> 38) & 0x3ffffff;
-	UInt32 BlockYRaw = (Value >> 26) & 0xfff;
-	UInt32 BlockZRaw = (Value & 0x3ffffff);
-	a_BlockX = ((BlockXRaw & 0x2000000) == 0) ? BlockXRaw : (~(BlockXRaw & 0x1ffffff)) + 1;
-	a_BlockY = ((BlockYRaw & 0x800) == 0)     ? BlockYRaw : (~(BlockXRaw & 0x7ff))     + 1;
-	a_BlockZ = ((BlockZRaw & 0x2000000) == 0) ? BlockZRaw : (~(BlockZRaw & 0x1ffffff)) + 1;
+	// Convert the 64 received bits into 3 coords:
+	UInt32 BlockXRaw = (Value >> 38) & 0x03ffffff;  // Top 26 bits
+	UInt32 BlockYRaw = (Value >> 26) & 0x0fff;      // Middle 12 bits
+	UInt32 BlockZRaw = (Value & 0x03ffffff);        // Bottom 26 bits
+	
+	// If the highest bit in the number's range is set, convert the number into negative:
+	a_BlockX = ((BlockXRaw & 0x02000000) == 0) ? BlockXRaw : -(0x04000000 - (int)BlockXRaw);
+	a_BlockY = ((BlockYRaw & 0x0800) == 0)     ? BlockYRaw : -(0x0800     - (int)BlockYRaw);
+	a_BlockZ = ((BlockZRaw & 0x02000000) == 0) ? BlockZRaw : -(0x04000000 - (int)BlockZRaw);
 	return true;
 }
 
@@ -535,6 +538,19 @@ bool cByteBuffer::WriteByte(unsigned char a_Value)
 
 
 bool cByteBuffer::WriteBEShort(short a_Value)
+{
+	CHECK_THREAD;
+	CheckValid();
+	PUTBYTES(2);
+	u_short Converted = htons((u_short)a_Value);
+	return WriteBuf(&Converted, 2);
+}
+
+
+
+
+
+bool cByteBuffer::WriteBEUShort(unsigned short a_Value)
 {
 	CHECK_THREAD;
 	CheckValid();

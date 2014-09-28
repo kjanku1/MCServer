@@ -802,7 +802,7 @@ void cProtocol180::SendPlayerListAddPlayer(const cPlayer & a_Player)
 	Pkt.WriteVarInt(0);
 	Pkt.WriteVarInt(1);
 	Pkt.WriteUUID(a_Player.GetUUID());
-	Pkt.WriteString(a_Player.GetName());
+	Pkt.WriteString(a_Player.GetPlayerListName());
 
 	const Json::Value & Properties = a_Player.GetClientHandle()->GetProperties();
 	Pkt.WriteVarInt(Properties.size());
@@ -824,17 +824,7 @@ void cProtocol180::SendPlayerListAddPlayer(const cPlayer & a_Player)
 
 	Pkt.WriteVarInt((UInt32)a_Player.GetGameMode());
 	Pkt.WriteVarInt((UInt32)a_Player.GetClientHandle()->GetPing());
-
-	AString CustomName = a_Player.GetPlayerListName();
-	if (CustomName != a_Player.GetName())
-	{
-		Pkt.WriteBool(true);
-		Pkt.WriteString(Printf("{\"text\":\"%s\"}", CustomName.c_str()));
-	}
-	else
-	{
-		Pkt.WriteBool(false);
-	}
+	Pkt.WriteBool(false);
 }
 
 
@@ -885,7 +875,7 @@ void cProtocol180::SendPlayerListUpdatePing(const cPlayer & a_Player)
 
 
 
-void cProtocol180::SendPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_OldListName)
+void cProtocol180::SendPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_CustomName)
 {
 	ASSERT(m_State == 3);  // In game mode?
 
@@ -894,15 +884,14 @@ void cProtocol180::SendPlayerListUpdateDisplayName(const cPlayer & a_Player, con
 	Pkt.WriteVarInt(1);
 	Pkt.WriteUUID(a_Player.GetUUID());
 
-	AString CustomName = a_Player.GetPlayerListName();
-	if (CustomName == a_Player.GetName())
+	if (a_CustomName.empty())
 	{
 		Pkt.WriteBool(false);
 	}
 	else
 	{
 		Pkt.WriteBool(true);
-		Pkt.WriteString(Printf("{\"text\":\"%s\"}", CustomName.c_str()));
+		Pkt.WriteString(Printf("{\"text\":\"%s\"}", a_CustomName.c_str()));
 	}
 }
 
@@ -1391,13 +1380,18 @@ void cProtocol180::SendUpdateBlockEntity(cBlockEntity & a_BlockEntity)
 void cProtocol180::SendUpdateSign(int a_BlockX, int a_BlockY, int a_BlockZ, const AString & a_Line1, const AString & a_Line2, const AString & a_Line3, const AString & a_Line4)
 {
 	ASSERT(m_State == 3);  // In game mode?
-	
+
 	cPacketizer Pkt(*this, 0x33);
 	Pkt.WritePosition(a_BlockX, a_BlockY, a_BlockZ);
-	Pkt.WriteString(Printf("{\"text\": \"%s\"}", a_Line1.c_str()));
-	Pkt.WriteString(Printf("{\"text\": \"%s\"}", a_Line2.c_str()));
-	Pkt.WriteString(Printf("{\"text\": \"%s\"}", a_Line3.c_str()));
-	Pkt.WriteString(Printf("{\"text\": \"%s\"}", a_Line4.c_str()));
+
+	Json::StyledWriter JsonWriter;
+	AString Lines[] = { a_Line1, a_Line2, a_Line3, a_Line4 };
+	for (size_t i = 0; i < ARRAYCOUNT(Lines); i++)
+	{
+		Json::Value RootValue;
+		RootValue["text"] = Lines[i];
+		Pkt.WriteString(JsonWriter.write(RootValue).c_str());
+	}
 }
 
 
@@ -1711,24 +1705,44 @@ void cProtocol180::AddReceivedData(const char * a_Data, size_t a_Size)
 			m_ReceivedData.ResetRead();
 			break;
 		}
-		cByteBuffer bb(PacketLen);
-		VERIFY(m_ReceivedData.ReadToByteBuffer(bb, (int)PacketLen));
-		m_ReceivedData.CommitRead();
-
-		// Compressed packets
+		
+		// Check packet for compression:
+		UInt32 CompressedSize = 0;
+		AString UncompressedData;
 		if (m_State == 3)
 		{
-			UInt32 CompressedSize;
-			if (!bb.ReadVarInt(CompressedSize))
+			UInt32 NumBytesRead = m_ReceivedData.GetReadableSpace();
+			m_ReceivedData.ReadVarInt(CompressedSize);
+			if (CompressedSize > 0)
 			{
-				// Not enough data
-				break;
+				// Decompress the data:
+				AString CompressedData;
+				m_ReceivedData.ReadString(CompressedData, CompressedSize);
+				InflateString(CompressedData.data(), CompressedSize, UncompressedData);
+				PacketLen = UncompressedData.size();
+			}
+			else
+			{
+				NumBytesRead -= m_ReceivedData.GetReadableSpace();  // How many bytes has the CompressedSize taken up?
+				ASSERT(PacketLen > NumBytesRead);
+				PacketLen -= NumBytesRead;
 			}
 		}
-
-		// Write one NUL extra, so that we can detect over-reads
-		bb.Write("\0", 1);
 		
+		// Move the packet payload to a separate cByteBuffer, bb:
+		cByteBuffer bb(PacketLen + 1);
+		if (CompressedSize == 0)
+		{
+			// No compression was used, move directly
+			VERIFY(m_ReceivedData.ReadToByteBuffer(bb, (int)PacketLen));
+		}
+		else
+		{
+			// Compression was used, move the uncompressed data:
+			VERIFY(bb.Write(UncompressedData.data(), UncompressedData.size()));
+		}
+		m_ReceivedData.CommitRead();
+
 		UInt32 PacketType;
 		if (!bb.ReadVarInt(PacketType))
 		{
@@ -1736,6 +1750,9 @@ void cProtocol180::AddReceivedData(const char * a_Data, size_t a_Size)
 			break;
 		}
 
+		// Write one NUL extra, so that we can detect over-reads
+		bb.Write("\0", 1);
+		
 		// Log the packet info into the comm log file:
 		if (g_ShouldLogCommIn)
 		{
@@ -1743,7 +1760,7 @@ void cProtocol180::AddReceivedData(const char * a_Data, size_t a_Size)
 			bb.ReadAll(PacketData);
 			bb.ResetRead();
 			bb.ReadVarInt(PacketType);
-			ASSERT(PacketData.size() > 0);
+			ASSERT(PacketData.size() > 0);  // We have written an extra NUL, so there had to be at least one byte read
 			PacketData.resize(PacketData.size() - 1);
 			AString PacketDataHex;
 			CreateHexDump(PacketDataHex, PacketData.data(), PacketData.size(), 16);
@@ -1777,7 +1794,8 @@ void cProtocol180::AddReceivedData(const char * a_Data, size_t a_Size)
 			return;
 		}
 
-		if (bb.GetReadableSpace() != 0)
+		// The packet should have 1 byte left in the buffer - the NUL we had added
+		if (bb.GetReadableSpace() != 1)
 		{
 			// Read more or less than packet length, report as error
 			LOGWARNING("Protocol 1.8: Wrong number of bytes read for packet 0x%x, state %d. Read " SIZE_T_FMT " bytes, packet contained %u bytes",
@@ -1965,13 +1983,19 @@ void cProtocol180::HandlePacketStatusRequest(cByteBuffer & a_ByteBuffer)
 void cProtocol180::HandlePacketLoginEncryptionResponse(cByteBuffer & a_ByteBuffer)
 {
 	UInt32 EncKeyLength, EncNonceLength;
-	a_ByteBuffer.ReadVarInt(EncKeyLength);
+	if (!a_ByteBuffer.ReadVarInt(EncKeyLength))
+	{
+		return;
+	}
 	AString EncKey;
 	if (!a_ByteBuffer.ReadString(EncKey, EncKeyLength))
 	{
 		return;
 	}
-	a_ByteBuffer.ReadVarInt(EncNonceLength);
+	if (!a_ByteBuffer.ReadVarInt(EncNonceLength))
+	{
+		return;
+	}
 	AString EncNonce;
 	if (!a_ByteBuffer.ReadString(EncNonce, EncNonceLength))
 	{
@@ -2292,7 +2316,10 @@ void cProtocol180::HandlePacketPluginMessage(cByteBuffer & a_ByteBuffer)
 {
 	HANDLE_READ(a_ByteBuffer, ReadVarUTF8String, AString, Channel);
 	AString Data;
-	a_ByteBuffer.ReadAll(Data);
+	if (!a_ByteBuffer.ReadString(Data, a_ByteBuffer.GetReadableSpace() - 1))
+	{
+		return;
+	}
 	m_Client->HandlePluginMessage(Channel, Data);
 }
 
@@ -2519,7 +2546,7 @@ void cProtocol180::SendData(const char * a_Data, size_t a_Size)
 
 
 
-bool cProtocol180::ReadItem(cByteBuffer & a_ByteBuffer, cItem & a_Item, size_t a_RemainingBytes)
+bool cProtocol180::ReadItem(cByteBuffer & a_ByteBuffer, cItem & a_Item, size_t a_KeepRemainingBytes)
 {
 	HANDLE_PACKET_READ(a_ByteBuffer, ReadBEShort, short, ItemType);
 	if (ItemType == -1)
@@ -2540,7 +2567,7 @@ bool cProtocol180::ReadItem(cByteBuffer & a_ByteBuffer, cItem & a_Item, size_t a
 	}
 
 	AString Metadata;
-	if (!a_ByteBuffer.ReadString(Metadata, a_ByteBuffer.GetReadableSpace() - a_RemainingBytes) || (Metadata.size() == 0) || (Metadata[0] == 0))
+	if (!a_ByteBuffer.ReadString(Metadata, a_ByteBuffer.GetReadableSpace() - a_KeepRemainingBytes - 1) || (Metadata.size() == 0) || (Metadata[0] == 0))
 	{
 		// No metadata
 		return true;
@@ -3035,7 +3062,7 @@ void cProtocol180::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 {
 	switch (a_Mob.GetMobType())
 	{
-		case cMonster::mtCreeper:
+		case mtCreeper:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cCreeper &)a_Mob).IsBlowing() ? 1 : -1);
@@ -3044,28 +3071,28 @@ void cProtocol180::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtBat:
+		case mtBat:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cBat &)a_Mob).IsHanging() ? 1 : 0);
 			break;
 		}
 		
-		case cMonster::mtPig:
+		case mtPig:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cPig &)a_Mob).IsSaddled() ? 1 : 0);
 			break;
 		}
 		
-		case cMonster::mtVillager:
+		case mtVillager:
 		{
 			WriteByte(0x50);
 			WriteInt(((const cVillager &)a_Mob).GetVilType());
 			break;
 		}
 		
-		case cMonster::mtZombie:
+		case mtZombie:
 		{
 			WriteByte(0x0c);
 			WriteByte(((const cZombie &)a_Mob).IsBaby() ? 1 : 0);
@@ -3076,14 +3103,14 @@ void cProtocol180::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtGhast:
+		case mtGhast:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cGhast &)a_Mob).IsCharging());
 			break;
 		}
 		
-		case cMonster::mtWolf:
+		case mtWolf:
 		{
 			const cWolf & Wolf = (const cWolf &)a_Mob;
 			Byte WolfStatus = 0;
@@ -3111,7 +3138,7 @@ void cProtocol180::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtSheep:
+		case mtSheep:
 		{
 			WriteByte(0x10);
 			Byte SheepMetadata = 0;
@@ -3124,7 +3151,7 @@ void cProtocol180::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtEnderman:
+		case mtEnderman:
 		{
 			WriteByte(0x30);
 			WriteShort((Byte)(((const cEnderman &)a_Mob).GetCarriedBlock()));
@@ -3135,21 +3162,21 @@ void cProtocol180::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtSkeleton:
+		case mtSkeleton:
 		{
 			WriteByte(0x0d);
 			WriteByte(((const cSkeleton &)a_Mob).IsWither() ? 1 : 0);
 			break;
 		}
 		
-		case cMonster::mtWitch:
+		case mtWitch:
 		{
 			WriteByte(0x15);
 			WriteByte(((const cWitch &)a_Mob).IsAngry() ? 1 : 0);
 			break;
 		}
 
-		case cMonster::mtWither:
+		case mtWither:
 		{
 			WriteByte(0x54);  // Int at index 20
 			WriteInt(((const cWither &)a_Mob).GetWitherInvulnerableTicks());
@@ -3158,21 +3185,21 @@ void cProtocol180::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtSlime:
+		case mtSlime:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cSlime &)a_Mob).GetSize());
 			break;
 		}
 		
-		case cMonster::mtMagmaCube:
+		case mtMagmaCube:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cMagmaCube &)a_Mob).GetSize());
 			break;
 		}
 		
-		case cMonster::mtHorse:
+		case mtHorse:
 		{
 			const cHorse & Horse = (const cHorse &)a_Mob;
 			int Flags = 0;

@@ -681,8 +681,19 @@ void cWorld::GenerateRandomSpawn(void)
 {
 	LOGD("Generating random spawnpoint...");
 
-	while (IsBlockWaterOrIce(GetBlock((int)m_SpawnX, GetHeight((int)m_SpawnX, (int)m_SpawnZ), (int)m_SpawnZ)))
+	// Look for a spawn point at most 100 chunks away from map center:
+	for (int i = 0; i < 100; i++)
 	{
+		EMCSBiome biome = GetBiomeAt((int)m_SpawnX, (int)m_SpawnZ);
+		if (
+			(biome != biOcean) && (biome != biFrozenOcean) &&  // The biome is acceptable (don't want a small ocean island)
+			!IsBlockWaterOrIce(GetBlock((int)m_SpawnX, GetHeight((int)m_SpawnX, (int)m_SpawnZ), (int)m_SpawnZ))  // The terrain is acceptable (don't want to spawn inside a lake / river)
+		)
+		{
+			// A good spawnpoint was found
+			break;
+		}
+		// Try a neighboring chunk:
 		if ((GetTickRandomNumber(4) % 2) == 0)  // Randomise whether to increment X or Z coords
 		{
 			m_SpawnX += cChunkDef::Width;
@@ -691,11 +702,11 @@ void cWorld::GenerateRandomSpawn(void)
 		{
 			m_SpawnZ += cChunkDef::Width;
 		}
-	}
+	}  // for i - 100*
 
 	m_SpawnY = (double)GetHeight((int)m_SpawnX, (int)m_SpawnZ) + 1.6f;  // 1.6f to accomodate player height
 
-	LOGD("Generated random spawnpoint %i %i %i", (int)m_SpawnX, (int)m_SpawnY, (int)m_SpawnZ);
+	LOGINFO("Generated random spawnpoint position {%i, %i, %i}", (int)m_SpawnX, (int)m_SpawnY, (int)m_SpawnZ);
 }
 
 
@@ -791,8 +802,8 @@ void cWorld::InitialiseAndLoadMobSpawningValues(cIniFile & a_IniFile)
 	AStringVector SplitList = StringSplitAndTrim(AllMonsters, ",");
 	for (AStringVector::const_iterator itr = SplitList.begin(), end = SplitList.end(); itr != end; ++itr)
 	{
-		cMonster::eType ToAdd = cMonster::StringToMobType(*itr);
-		if (ToAdd != cMonster::mtInvalidType)
+		eMonsterType ToAdd = cMonster::StringToMobType(*itr);
+		if (ToAdd != mtInvalidType)
 		{
 			m_AllowedMobs.insert(ToAdd);
 			LOGD("Allowed mob: %s", itr->c_str());
@@ -2225,7 +2236,7 @@ void cWorld::BroadcastPlayerListUpdatePing(const cPlayer & a_Player, const cClie
 
 
 
-void cWorld::BroadcastPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_OldListName, const cClientHandle * a_Exclude)
+void cWorld::BroadcastPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_CustomName, const cClientHandle * a_Exclude)
 {
 	cCSLock Lock(m_CSPlayers);
 	for (cPlayerList::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
@@ -2235,7 +2246,7 @@ void cWorld::BroadcastPlayerListUpdateDisplayName(const cPlayer & a_Player, cons
 		{
 			continue;
 		}
-		ch->SendPlayerListUpdateDisplayName(a_Player, a_OldListName);
+		ch->SendPlayerListUpdateDisplayName(a_Player, a_CustomName);
 	}
 }
 
@@ -3198,7 +3209,7 @@ bool cWorld::IsBlockDirectlyWatered(int a_BlockX, int a_BlockY, int a_BlockZ)
 
 
 
-int cWorld::SpawnMob(double a_PosX, double a_PosY, double a_PosZ, cMonster::eType a_MonsterType)
+int cWorld::SpawnMob(double a_PosX, double a_PosY, double a_PosZ, eMonsterType a_MonsterType)
 {
 	cMonster * Monster = NULL;
 
@@ -3334,7 +3345,7 @@ void cWorld::SetChunkAlwaysTicked(int a_ChunkX, int a_ChunkZ, bool a_AlwaysTicke
 
 
 
-cRedstoneSimulator * cWorld::InitializeRedstoneSimulator(cIniFile & a_IniFile)
+cRedstoneSimulator<cChunk, cWorld> * cWorld::InitializeRedstoneSimulator(cIniFile & a_IniFile)
 {
 	AString SimulatorName = a_IniFile.GetValueSet("Physics", "RedstoneSimulator", "Incremental");
 
@@ -3344,11 +3355,11 @@ cRedstoneSimulator * cWorld::InitializeRedstoneSimulator(cIniFile & a_IniFile)
 		SimulatorName = "Incremental";
 	}
 	
-	cRedstoneSimulator * res = NULL;
+	cRedstoneSimulator<cChunk, cWorld> * res = NULL;
 
 	if (NoCaseCompare(SimulatorName, "Incremental") == 0)
 	{
-		res = new cIncrementalRedstoneSimulator(*this);
+		res = MakeIncrementalRedstoneSimulator(*this);
 	}
 	else if (NoCaseCompare(SimulatorName, "noop") == 0)
 	{

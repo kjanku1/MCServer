@@ -816,7 +816,8 @@ void cPlayer::SetCustomName(const AString & a_CustomName)
 	{
 		return;
 	}
-	AString OldCustomName = m_CustomName;
+
+	m_World->BroadcastPlayerListRemovePlayer(*this);
 
 	m_CustomName = a_CustomName;
 	if (m_CustomName.length() > 16)
@@ -824,8 +825,8 @@ void cPlayer::SetCustomName(const AString & a_CustomName)
 		m_CustomName = m_CustomName.substr(0, 16);
 	}
 
-	m_World->BroadcastPlayerListUpdateDisplayName(*this, m_CustomName);
-	m_World->BroadcastSpawnEntity(*this, m_ClientHandle);
+	m_World->BroadcastPlayerListAddPlayer(*this);
+	m_World->BroadcastSpawnEntity(*this, GetClientHandle());
 }
 
 
@@ -2060,8 +2061,8 @@ void cPlayer::UpdateMovementStats(const Vector3d & a_DeltaPos)
 				cMonster * Monster = (cMonster *)m_AttachedTo;
 				switch (Monster->GetMobType())
 				{
-					case cMonster::mtPig:   m_Stats.AddValue(statDistPig,   Value); break;
-					case cMonster::mtHorse: m_Stats.AddValue(statDistHorse, Value); break;
+					case mtPig:   m_Stats.AddValue(statDistPig,   Value); break;
+					case mtHorse: m_Stats.AddValue(statDistHorse, Value); break;
 					default: break;
 				}
 				break;

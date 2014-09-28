@@ -838,23 +838,11 @@ void cProtocol172::SendPlayerListUpdatePing(const cPlayer & a_Player)
 
 
 
-void cProtocol172::SendPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_OldListName)
+void cProtocol172::SendPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_CustomName)
 {
-	ASSERT(m_State == 3);  // In game mode?
-	if (a_OldListName == a_Player.GetPlayerListName())
-	{
-		return;
-	}
-
-	// Remove the old name from the tablist:
-	{
-		cPacketizer Pkt(*this, 0x38);
-		Pkt.WriteString(a_OldListName);
-		Pkt.WriteBool(false);
-		Pkt.WriteShort(0);
-	}
-
-	SendPlayerListAddPlayer(a_Player);
+	// Not implemented in this protocol version
+	UNUSED(a_Player);
+	UNUSED(a_CustomName);
 }
 
 
@@ -1519,9 +1507,6 @@ void cProtocol172::AddReceivedData(const char * a_Data, size_t a_Size)
 		VERIFY(m_ReceivedData.ReadToByteBuffer(bb, (int)PacketLen));
 		m_ReceivedData.CommitRead();
 
-		// Write one NUL extra, so that we can detect over-reads
-		bb.Write("\0", 1);
-		
 		UInt32 PacketType;
 		if (!bb.ReadVarInt(PacketType))
 		{
@@ -1529,6 +1514,9 @@ void cProtocol172::AddReceivedData(const char * a_Data, size_t a_Size)
 			break;
 		}
 
+		// Write one NUL extra, so that we can detect over-reads
+		bb.Write("\0", 1);
+		
 		// Log the packet info into the comm log file:
 		if (g_ShouldLogCommIn)
 		{
@@ -1536,7 +1524,7 @@ void cProtocol172::AddReceivedData(const char * a_Data, size_t a_Size)
 			bb.ReadAll(PacketData);
 			bb.ResetRead();
 			bb.ReadVarInt(PacketType);
-			ASSERT(PacketData.size() > 0);
+			ASSERT(PacketData.size() > 0);  // We have written an extra NUL, so there had to be at least one byte read
 			PacketData.resize(PacketData.size() - 1);
 			AString PacketDataHex;
 			CreateHexDump(PacketDataHex, PacketData.data(), PacketData.size(), 16);
@@ -2752,7 +2740,7 @@ void cProtocol172::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 {
 	switch (a_Mob.GetMobType())
 	{
-		case cMonster::mtCreeper:
+		case mtCreeper:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cCreeper &)a_Mob).IsBlowing() ? 1 : -1);
@@ -2761,28 +2749,28 @@ void cProtocol172::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtBat:
+		case mtBat:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cBat &)a_Mob).IsHanging() ? 1 : 0);
 			break;
 		}
 		
-		case cMonster::mtPig:
+		case mtPig:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cPig &)a_Mob).IsSaddled() ? 1 : 0);
 			break;
 		}
 		
-		case cMonster::mtVillager:
+		case mtVillager:
 		{
 			WriteByte(0x50);
 			WriteInt(((const cVillager &)a_Mob).GetVilType());
 			break;
 		}
 		
-		case cMonster::mtZombie:
+		case mtZombie:
 		{
 			WriteByte(0x0c);
 			WriteByte(((const cZombie &)a_Mob).IsBaby() ? 1 : 0);
@@ -2793,14 +2781,14 @@ void cProtocol172::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtGhast:
+		case mtGhast:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cGhast &)a_Mob).IsCharging());
 			break;
 		}
 		
-		case cMonster::mtWolf:
+		case mtWolf:
 		{
 			const cWolf & Wolf = (const cWolf &)a_Mob;
 			Byte WolfStatus = 0;
@@ -2828,7 +2816,7 @@ void cProtocol172::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtSheep:
+		case mtSheep:
 		{
 			WriteByte(0x10);
 			Byte SheepMetadata = 0;
@@ -2841,7 +2829,7 @@ void cProtocol172::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtEnderman:
+		case mtEnderman:
 		{
 			WriteByte(0x10);
 			WriteByte((Byte)(((const cEnderman &)a_Mob).GetCarriedBlock()));
@@ -2852,21 +2840,21 @@ void cProtocol172::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtSkeleton:
+		case mtSkeleton:
 		{
 			WriteByte(0x0d);
 			WriteByte(((const cSkeleton &)a_Mob).IsWither() ? 1 : 0);
 			break;
 		}
 		
-		case cMonster::mtWitch:
+		case mtWitch:
 		{
 			WriteByte(0x15);
 			WriteByte(((const cWitch &)a_Mob).IsAngry() ? 1 : 0);
 			break;
 		}
 
-		case cMonster::mtWither:
+		case mtWither:
 		{
 			WriteByte(0x54);  // Int at index 20
 			WriteInt(((const cWither &)a_Mob).GetWitherInvulnerableTicks());
@@ -2875,21 +2863,21 @@ void cProtocol172::cPacketizer::WriteMobMetadata(const cMonster & a_Mob)
 			break;
 		}
 		
-		case cMonster::mtSlime:
+		case mtSlime:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cSlime &)a_Mob).GetSize());
 			break;
 		}
 		
-		case cMonster::mtMagmaCube:
+		case mtMagmaCube:
 		{
 			WriteByte(0x10);
 			WriteByte(((const cMagmaCube &)a_Mob).GetSize());
 			break;
 		}
 		
-		case cMonster::mtHorse:
+		case mtHorse:
 		{
 			const cHorse & Horse = (const cHorse &)a_Mob;
 			int Flags = 0;

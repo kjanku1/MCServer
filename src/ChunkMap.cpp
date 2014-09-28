@@ -17,7 +17,7 @@
 #include "MobSpawner.h"
 #include "BoundingBox.h"
 #include "SetChunkData.h"
-
+#include "Blocks/ChunkInterface.h"
 #include "Entities/Pickup.h"
 
 #ifndef _WIN32
@@ -1888,6 +1888,7 @@ void cChunkMap::DoExplosionAt(double a_ExplosionSize, double a_BlockX, double a_
 						case E_BLOCK_OBSIDIAN:
 						case E_BLOCK_BEACON:
 						case E_BLOCK_BEDROCK:
+						case E_BLOCK_BARRIER:
 						case E_BLOCK_WATER:
 						case E_BLOCK_LAVA:
 						{

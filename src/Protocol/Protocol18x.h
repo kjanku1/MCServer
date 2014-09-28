@@ -101,7 +101,7 @@ public:
 	virtual void SendPlayerListRemovePlayer     (const cPlayer & a_Player) override;
 	virtual void SendPlayerListUpdateGameMode   (const cPlayer & a_Player) override;
 	virtual void SendPlayerListUpdatePing       (const cPlayer & a_Player) override;
-	virtual void SendPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_OldListName) override;
+	virtual void SendPlayerListUpdateDisplayName(const cPlayer & a_Player, const AString & a_CustomName) override;
 	virtual void SendPlayerMaxSpeed             (void) override;
 	virtual void SendPlayerMoveLook             (void) override;
 	virtual void SendPlayerPosition             (void) override;
@@ -321,8 +321,10 @@ protected:
 
 	void SendCompass(const cWorld & a_World);
 	
-	/** Reads an item out of the received data, sets a_Item to the values read. Returns false if not enough received data */
-	virtual bool ReadItem(cByteBuffer & a_ByteBuffer, cItem & a_Item, size_t a_RemainingBytes = 0);
+	/** Reads an item out of the received data, sets a_Item to the values read.
+	Returns false if not enough received data.
+	a_KeepRemainingBytes tells the function to keep that many bytes at the end of the buffer. */
+	virtual bool ReadItem(cByteBuffer & a_ByteBuffer, cItem & a_Item, size_t a_KeepRemainingBytes = 0);
 	
 	/** Parses item metadata as read by ReadItem(), into the item enchantments. */
 	void ParseItemMetadata(cItem & a_Item, const AString & a_Metadata);
